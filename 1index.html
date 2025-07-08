@@ -1,0 +1,751 @@
+﻿<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบติดตาม OT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Prompt', 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            max-width: 900px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        input[type="date"],
+        input[type="time"],
+        input[type="number"],
+        textarea,
+        select {
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1rem;
+            font-family: 'Prompt', sans-serif;
+        }
+        button {
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s ease-in-out;
+            cursor: pointer;
+            font-family: 'Prompt', sans-serif;
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: #ffffff;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+        }
+        .btn-ot-rate {
+            background-color: #e0f2fe;
+            color: #0c4a6e;
+            border: 1px solid #90cdf4;
+        }
+        .btn-ot-rate.selected {
+            background-color: #2563eb;
+            color: #ffffff;
+        }
+        .btn-ot-rate:hover:not(.selected) {
+            background-color: #bfdbfe;
+        }
+        .ot-entry-item {
+            background-color: #f9fafb;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+        }
+        .settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .settings-content {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        /* Dark Mode styles from ot_tracker_full.html */
+        .dark body { background-color: #1f2937; color: #e5e7eb; }
+        .dark .bg-white { background-color: #374151 !important; }
+        .dark .text-gray-700, .dark .text-gray-800 { color: #e5e7eb !important; }
+        .dark .btn-secondary { background-color: #4b5563; color: #f9fafb; }
+        .dark .ot-entry-item { background-color: #4b5563; border-color: #6b7280; }
+        .dark input, .dark textarea, .dark select {
+            background-color: #4b5563;
+            color: #e5e7eb;
+            border-color: #6b7280;
+        }
+        .dark input:focus, .dark textarea:focus, .dark select:focus {
+            border-color: #6366f1;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+        }
+        .dark .btn-ot-rate { background-color: #1a5c7a; color: #e0f2fe; border: 1px solid #2d79a2; }
+        .dark .btn-ot-rate.selected { background-color: #3b82f6; color: #ffffff; }
+        .dark .btn-ot-rate:hover:not(.selected) { background-color: #1d4ed8; }
+        .dark .bg-blue-50 { background-color: #1e3a8a; }
+        .dark .text-blue-700 { color: #93c5fd; }
+        .dark .bg-green-50 { background-color: #166534; }
+        .dark .text-green-700 { color: #86efac; }
+        .dark .bg-purple-50 { background-color: #4c1d95; }
+        .dark .text-purple-700 { color: #a78bfa; }
+        .dark .bg-yellow-50 { background-color: #854d09; }
+        .dark .text-yellow-700 { color: #fde047; }
+        .dark .bg-gray-50 { background-color: #374151; }
+        .dark .text-gray-600, .dark .text-gray-500 { color: #9ca3af; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-3xl font-bold text-gray-800">ระบบติดตาม OT</h1>
+            <button onclick="toggleDarkMode()" class="btn-secondary px-3 py-1 rounded">🌙 สลับโหมด</button>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">เพิ่มการทำงาน OT</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="otDate" class="block text-sm font-medium text-gray-700 mb-1">วันที่:</label>
+                    <input type="date" id="otDate" class="focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="otStartTime" class="block text-sm font-medium text-gray-700 mb-1">เวลาเริ่ม:</label>
+                    <input type="time" id="otStartTime" class="focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="otEndTime" class="block text-sm font-medium text-gray-700 mb-1">เวลาสิ้นสุด:</label>
+                    <input type="time" id="otEndTime" class="focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="otDetails" class="block text-sm font-medium text-gray-700 mb-1">รายละเอียด (ถ้ามี):</label>
+                    <textarea id="otDetails" rows="2" class="focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">เลือกอัตรา OT:</label>
+                <div id="otRateButtons" class="flex flex-wrap justify-center gap-2">
+                    <button class="btn-ot-rate" data-rate="1">1x</button>
+                    <button class="btn-ot-rate selected" data-rate="1.5">1.5x</button>
+                    <button class="btn-ot-rate" data-rate="2">2x</button>
+                    <button class="btn-ot-rate" data-rate="3">3x</button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2 text-center">
+                    (ตัวอย่าง: วันทำงานปกติ 1.5x, วันหยุด 2x (เสาร์-อาทิตย์) หรือ 3x (OT วันหยุด))
+                </p>
+            </div>
+
+            <button id="addOtEntry" class="btn-primary w-full">บันทึก OT</button>
+            <button id="updateOtEntry" class="btn-primary w-full mt-2 hidden">อัปเดต OT</button>
+            <button id="cancelEdit" class="btn-secondary w-full mt-2 hidden">ยกเลิก</button>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">สรุปและสถิติ</h2>
+            <div class="flex flex-wrap items-center gap-4 mb-4">
+                <div>
+                    <label for="summaryMonth" class="block text-sm font-medium text-gray-700 mb-1">เลือกเดือน:</label>
+                    <select id="summaryMonth" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                    </select>
+                </div>
+                <div>
+                    <label for="summaryYear" class="block text-sm font-medium text-gray-700 mb-1">เลือกปี:</label>
+                    <select id="summaryYear" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                    </select>
+                </div>
+                <button id="filterSummaryButton" class="btn-secondary mt-auto px-4 py-2">ดูสรุป</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                <div class="p-3 bg-blue-50 rounded-lg">
+                    <p class="text-sm text-gray-600">วันนี้</p>
+                    <p id="summaryDaily" class="text-xl font-bold text-blue-700">0 ชม. (0.00 ฿)</p>
+                </div>
+                <div class="p-3 bg-green-50 rounded-lg">
+                    <p class="text-sm text-gray-600">สัปดาห์นี้</p>
+                    <p id="summaryWeekly" class="text-xl font-bold text-green-700">0 ชม. (0.00 ฿)</p>
+                </div>
+                <div class="p-3 bg-purple-50 rounded-lg">
+                    <p class="text-sm text-gray-600">เดือนที่เลือก</p>
+                    <p id="summaryMonthly" class="text-xl font-bold text-purple-700">0 ชม. (0.00 ฿)</p>
+                </div>
+                <div class="p-3 bg-yellow-50 rounded-lg">
+                    <p class="text-sm text-gray-600">ปีที่เลือก</p>
+                    <p id="summaryYearly" class="text-xl font-bold text-yellow-700">0 ชม. (0.00 ฿)</p>
+                </div>
+            </div>
+            <div class="mt-4 p-3 bg-gray-50 rounded-lg text-center">
+                <p class="text-sm text-gray-600">ค่าแรงต่อชั่วโมงพื้นฐาน:</p>
+                <p id="baseHourlyWageDisplay" class="text-xl font-bold text-gray-800">0.00 ฿/ชม.</p>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">รายการ OT ย้อนหลัง</h2>
+            <div id="otEntriesList" class="flex flex-col gap-3">
+                <p class="text-gray-500 text-center" id="noEntriesMessage">ยังไม่มีการทำงาน OT</p>
+            </div>
+            <div class="mt-4 flex gap-2 justify-center">
+                <button onclick="exportCSV()" class="btn-secondary px-3 py-1 rounded">Export CSV</button>
+                <button onclick="exportExcel()" class="btn-secondary px-3 py-1 rounded">Export Excel</button>
+                <button onclick="exportPDF()" class="btn-secondary px-3 py-1 rounded">Export PDF</button>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button id="settingsButton" class="btn-secondary">ตั้งค่า</button>
+        </div>
+
+        <div id="settingsModal" class="settings-modal hidden">
+            <div class="settings-content">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4">ตั้งค่า</h2>
+                <div class="mb-4">
+                    <label for="baseMonthlySalary" class="block text-sm font-medium text-gray-700 mb-1">เงินเดือนพื้นฐาน (บาท):</label>
+                    <input type="number" id="baseMonthlySalary" placeholder="เช่น 15000" class="focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="normalWorkingDaysPerMonth" class="block text-sm font-medium text-gray-700 mb-1">จำนวนวันทำงานปกติ/เดือน:</label>
+                    <input type="number" id="normalWorkingDaysPerMonth" placeholder="เช่น 22" class="focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="normalWorkingHoursPerDay" class="block text-sm font-medium text-gray-700 mb-1">จำนวนชั่วโมงทำงานปกติ/วัน:</label>
+                    <input type="number" id="normalWorkingHoursPerDay" placeholder="เช่น 8" class="focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <button id="saveSettings" class="btn-primary w-full">บันทึกการตั้งค่า</button>
+                <button id="closeSettings" class="btn-secondary w-full mt-2">ปิด</button>
+            </div>
+        </div>
+
+        <div id="messageBox" class="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg shadow-lg hidden">
+            <p id="messageText"></p>
+            <button class="absolute top-1 right-2 text-gray-400 hover:text-white" onclick="document.getElementById('messageBox').classList.add('hidden')">
+                &times;
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for settings
+        let baseMonthlySalary = 0;
+        let normalWorkingDaysPerMonth = 22;
+        let normalWorkingHoursPerDay = 8;
+        let baseHourlyWage = 0;
+        let otEntries = [];
+        let editingEntryId = null;
+
+        // DOM Elements
+        const otDateInput = document.getElementById('otDate');
+        const otStartTimeInput = document.getElementById('otStartTime');
+        const otEndTimeInput = document.getElementById('otEndTime');
+        const otDetailsInput = document.getElementById('otDetails');
+        const otRateButtons = document.getElementById('otRateButtons');
+        const addOtEntryBtn = document.getElementById('addOtEntry');
+        const updateOtEntryBtn = document.getElementById('updateOtEntry');
+        const cancelEditBtn = document.getElementById('cancelEdit');
+        const otEntriesList = document.getElementById('otEntriesList');
+        const noEntriesMessage = document.getElementById('noEntriesMessage');
+
+        const summaryDaily = document.getElementById('summaryDaily');
+        const summaryWeekly = document.getElementById('summaryWeekly');
+        const summaryMonthly = document.getElementById('summaryMonthly');
+        const summaryYearly = document.getElementById('summaryYearly');
+        const baseHourlyWageDisplay = document.getElementById('baseHourlyWageDisplay');
+
+        const settingsButton = document.getElementById('settingsButton');
+        const settingsModal = document.getElementById('settingsModal');
+        const baseMonthlySalaryInput = document.getElementById('baseMonthlySalary');
+        const normalWorkingDaysPerMonthInput = document.getElementById('normalWorkingDaysPerMonth');
+        const normalWorkingHoursPerDayInput = document.getElementById('normalWorkingHoursPerDay');
+        const saveSettingsBtn = document.getElementById('saveSettings');
+        const closeSettingsBtn = document.getElementById('closeSettings');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+
+        const summaryMonthSelect = document.getElementById('summaryMonth');
+        const summaryYearSelect = document.getElementById('summaryYear');
+        const filterSummaryButton = document.getElementById('filterSummaryButton');
+
+        // Function to show a message box
+        function showMessage(message, duration = 3000) {
+            messageText.textContent = message;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, duration);
+        }
+
+        // Load settings from localStorage
+        function loadSettings() {
+            const savedSettings = JSON.parse(localStorage.getItem('otTrackerSettings')) || {};
+            baseMonthlySalary = savedSettings.baseMonthlySalary || 0;
+            normalWorkingDaysPerMonth = savedSettings.normalWorkingDaysPerMonth || 22;
+            normalWorkingHoursPerDay = savedSettings.normalWorkingHoursPerDay || 8;
+
+            baseMonthlySalaryInput.value = baseMonthlySalary;
+            normalWorkingDaysPerMonthInput.value = normalWorkingDaysPerMonth;
+            normalWorkingHoursPerDayInput.value = normalWorkingHoursPerDay;
+
+            calculateBaseHourlyWage();
+        }
+
+        // Save settings to localStorage
+        function saveSettings() {
+            const settings = {
+                baseMonthlySalary: parseFloat(baseMonthlySalaryInput.value) || 0,
+                normalWorkingDaysPerMonth: parseInt(normalWorkingDaysPerMonthInput.value) || 22,
+                normalWorkingHoursPerDay: parseInt(normalWorkingHoursPerDayInput.value) || 8
+            };
+            localStorage.setItem('otTrackerSettings', JSON.stringify(settings));
+            loadSettings();
+            showMessage('บันทึกการตั้งค่าเรียบร้อยแล้ว!');
+            settingsModal.classList.add('hidden');
+            updateSummaries();
+        }
+
+        // Calculate base hourly wage
+        function calculateBaseHourlyWage() {
+            if (baseMonthlySalary > 0 && normalWorkingDaysPerMonth > 0 && normalWorkingHoursPerDay > 0) {
+                baseHourlyWage = baseMonthlySalary / (normalWorkingDaysPerMonth * normalWorkingHoursPerDay);
+            } else {
+                baseHourlyWage = 0;
+            }
+            baseHourlyWageDisplay.textContent = `${baseHourlyWage.toFixed(2)} ฿/ชม.`;
+        }
+
+        // Load OT entries from localStorage
+        function loadOtEntries() {
+            otEntries = JSON.parse(localStorage.getItem('otEntries')) || [];
+            renderOtEntries();
+            updateSummaries();
+        }
+
+        // Save OT entries to localStorage
+        function saveOtEntries() {
+            localStorage.setItem('otEntries', JSON.stringify(otEntries));
+            renderOtEntries();
+            updateSummaries();
+        }
+
+        // Get today's date string
+        function getTodayDateString() {
+            const today = new Date();
+            return today.toISOString().split('T')[0];
+        }
+
+        // Format date for display
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        // Calculate OT hours and pay
+        function calculateOt(dateStr, startTimeStr, endTimeStr, otRateMultiplier) {
+            const startDate = new Date(`${dateStr}T${startTimeStr}:00`);
+            let endDate = new Date(`${dateStr}T${endTimeStr}:00`);
+
+            if (endDate.getTime() < startDate.getTime()) {
+                endDate.setDate(endDate.getDate() + 1);
+            }
+
+            const durationMs = endDate.getTime() - startDate.getTime();
+            const totalHours = durationMs / (1000 * 60 * 60);
+            if (totalHours <= 0) {
+                showMessage('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น', 5000);
+                return { hours: 0, pay: 0 };
+            }
+
+            const calculatedPay = totalHours * baseHourlyWage * otRateMultiplier;
+            return {
+                hours: totalHours,
+                pay: calculatedPay
+            };
+        }
+
+        // Render OT entries
+        function renderOtEntries() {
+            otEntriesList.innerHTML = '';
+            if (otEntries.length === 0) {
+                noEntriesMessage.classList.remove('hidden');
+                return;
+            } else {
+                noEntriesMessage.classList.add('hidden');
+            }
+
+            const sortedEntries = [...otEntries].sort((a, b) => new Date(b.date) - new Date(a.date));
+            sortedEntries.forEach(entry => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'ot-entry-item flex flex-col sm:flex-row justify-between items-start sm:items-center';
+                entryDiv.innerHTML = `
+                    <div class="mb-2 sm:mb-0">
+                        <p class="text-lg font-semibold text-gray-800">${formatDate(entry.date)}</p>
+                        <p class="text-gray-600">${entry.startTime} - ${entry.endTime} (OT ${entry.otRateMultiplier}x)</p>
+                        <p class="text-gray-700">ชั่วโมง: ${entry.calculatedHours.toFixed(2)} ชม. | ค่าแรง: ${entry.calculatedPay.toFixed(2)} ฿</p>
+                        ${entry.details ? `<p class="text-sm text-gray-500 italic">รายละเอียด: ${entry.details}</p>` : ''}
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="btn-secondary px-3 py-1 text-sm edit-btn" data-id="${entry.id}">แก้ไข</button>
+                        <button class="btn-secondary px-3 py-1 text-sm delete-btn" data-id="${entry.id}">ลบ</button>
+                    </div>
+                `;
+                otEntriesList.appendChild(entryDiv);
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', (e) => editOtEntry(e.target.dataset.id));
+            });
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', (e) => deleteOtEntry(e.target.dataset.id));
+            });
+        }
+
+        // Update summaries
+        function updateSummaries() {
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const currentWeekStart = new Date(now);
+            currentWeekStart.setDate(now.getDate() - now.getDay());
+            currentWeekStart.setHours(0, 0, 0, 0);
+
+            const selectedMonth = parseInt(summaryMonthSelect.value);
+            const selectedYear = parseInt(summaryYearSelect.value);
+
+            let dailyHours = 0, dailyPay = 0;
+            let weeklyHours = 0, weeklyPay = 0;
+            let monthlyFilteredHours = 0, monthlyFilteredPay = 0;
+            let yearlyFilteredHours = 0, yearlyFilteredPay = 0;
+
+            otEntries.forEach(entry => {
+                const entryDate = new Date(entry.date);
+                entryDate.setHours(0, 0, 0, 0);
+
+                if (entry.date === today) {
+                    dailyHours += entry.calculatedHours;
+                    dailyPay += entry.calculatedPay;
+                }
+
+                if (entryDate >= currentWeekStart) {
+                    weeklyHours += entry.calculatedHours;
+                    weeklyPay += entry.calculatedPay;
+                }
+
+                if (entryDate.getMonth() === selectedMonth && entryDate.getFullYear() === selectedYear) {
+                    monthlyFilteredHours += entry.calculatedHours;
+                    monthlyFilteredPay += entry.calculatedPay;
+                }
+
+                if (entryDate.getFullYear() === selectedYear) {
+                    yearlyFilteredHours += entry.calculatedHours;
+                    yearlyFilteredPay += entry.calculatedPay;
+                }
+            });
+
+            summaryDaily.textContent = `${dailyHours.toFixed(2)} ชม. (${dailyPay.toFixed(2)} ฿)`;
+            summaryWeekly.textContent = `${weeklyHours.toFixed(2)} ชม. (${weeklyPay.toFixed(2)} ฿)`;
+            summaryMonthly.textContent = `${monthlyFilteredHours.toFixed(2)} ชม. (${monthlyFilteredPay.toFixed(2)} ฿)`;
+            summaryYearly.textContent = `${yearlyFilteredHours.toFixed(2)} ชม. (${yearlyFilteredPay.toFixed(2)} ฿)`;
+        }
+
+        // Populate summary filters
+        function populateSummaryFilters() {
+            const currentYear = new Date().getFullYear();
+            const currentMonth = new Date().getMonth();
+
+            summaryYearSelect.innerHTML = '';
+            for (let i = currentYear + 1; i >= currentYear - 10; i--) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                summaryYearSelect.appendChild(option);
+            }
+            summaryYearSelect.value = currentYear;
+
+            summaryMonthSelect.innerHTML = '';
+            const monthNames = [
+                'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+            ];
+            monthNames.forEach((name, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = name;
+                summaryMonthSelect.appendChild(option);
+            });
+            summaryMonthSelect.value = currentMonth;
+        }
+
+        // Event handlers
+        otRateButtons.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-ot-rate')) {
+                document.querySelectorAll('.btn-ot-rate').forEach(btn => btn.classList.remove('selected'));
+                e.target.classList.add('selected');
+            }
+        });
+
+        addOtEntryBtn.addEventListener('click', () => {
+            const date = otDateInput.value;
+            const startTime = otStartTimeInput.value;
+            const endTime = otEndTimeInput.value;
+            const details = otDetailsInput.value.trim();
+            const selectedRateBtn = document.querySelector('.btn-ot-rate.selected');
+            const otRateMultiplier = parseFloat(selectedRateBtn ? selectedRateBtn.dataset.rate : 1.5);
+
+            if (!date || !startTime || !endTime) {
+                showMessage('กรุณาใส่ข้อมูลให้ครบถ้วน: วันที่, เวลาเริ่ม, และเวลาสิ้นสุด');
+                return;
+            }
+
+            if (baseHourlyWage === 0) {
+                showMessage('กรุณาตั้งค่าเงินเดือนพื้นฐานในหน้าตั้งค่าก่อน', 5000);
+                settingsModal.classList.remove('hidden');
+                return;
+            }
+
+            const { hours, pay } = calculateOt(date, startTime, endTime, otRateMultiplier);
+            if (hours === 0) return;
+
+            const newEntry = {
+                id: Date.now().toString(),
+                date,
+                startTime,
+                endTime,
+                details,
+                otRateMultiplier,
+                calculatedHours: hours,
+                calculatedPay: pay
+            };
+            otEntries.push(newEntry);
+            saveOtEntries();
+            showMessage('เพิ่มการทำงาน OT เรียบร้อยแล้ว!');
+            clearForm();
+        });
+
+        updateOtEntryBtn.addEventListener('click', () => {
+            const date = otDateInput.value;
+            const startTime = otStartTimeInput.value;
+            const endTime = otEndTimeInput.value;
+            const details = otDetailsInput.value.trim();
+            const selectedRateBtn = document.querySelector('.btn-ot-rate.selected');
+            const otRateMultiplier = parseFloat(selectedRateBtn ? selectedRateBtn.dataset.rate : 1.5);
+
+            if (!date || !startTime || !endTime) {
+                showMessage('กรุณาใส่ข้อมูลให้ครบถ้วน: วันที่, เวลาเริ่ม, และเวลาสิ้นสุด');
+                return;
+            }
+
+            if (baseHourlyWage === 0) {
+                showMessage('กรุณาตั้งค่าเงินเดือนพื้นฐานในหน้าตั้งค่าก่อน', 5000);
+                settingsModal.classList.remove('hidden');
+                return;
+            }
+
+            const { hours, pay } = calculateOt(date, startTime, endTime, otRateMultiplier);
+            if (hours === 0) return;
+
+            const entryIndex = otEntries.findIndex(entry => entry.id === editingEntryId);
+            if (entryIndex > -1) {
+                otEntries[entryIndex] = {
+                    ...otEntries[entryIndex],
+                    date,
+                    startTime,
+                    endTime,
+                    details,
+                    otRateMultiplier,
+                    calculatedHours: hours,
+                    calculatedPay: pay
+                };
+                saveOtEntries();
+                showMessage('อัปเดตการทำงาน OT เรียบร้อยแล้ว!');
+                clearForm();
+                editingEntryId = null;
+                addOtEntryBtn.classList.remove('hidden');
+                updateOtEntryBtn.classList.add('hidden');
+                cancelEditBtn.classList.add('hidden');
+            }
+        });
+
+        cancelEditBtn.addEventListener('click', () => {
+            clearForm();
+            editingEntryId = null;
+            addOtEntryBtn.classList.remove('hidden');
+            updateOtEntryBtn.classList.add('hidden');
+            cancelEditBtn.classList.add('hidden');
+        });
+
+        settingsButton.addEventListener('click', () => {
+            settingsModal.classList.remove('hidden');
+        });
+
+        closeSettingsBtn.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+        });
+
+        saveSettingsBtn.addEventListener('click', saveSettings);
+
+        filterSummaryButton.addEventListener('click', updateSummaries);
+
+        // Helper functions
+        function clearForm() {
+            otDateInput.value = '';
+            otStartTimeInput.value = '';
+            otEndTimeInput.value = '';
+            otDetailsInput.value = '';
+            document.querySelectorAll('.btn-ot-rate').forEach(btn => btn.classList.remove('selected'));
+            document.querySelector('.btn-ot-rate[data-rate="1.5"]').classList.add('selected'); // Default to 1.5x
+        }
+
+        function editOtEntry(id) {
+            console.log('Attempting to edit entry with ID:', id);
+            const entryToEdit = otEntries.find(entry => entry.id === id);
+
+            if (entryToEdit) {
+                console.log('Entry found:', entryToEdit);
+                editingEntryId = id;
+                otDateInput.value = entryToEdit.date;
+                otStartTimeInput.value = entryToEdit.startTime;
+                otEndTimeInput.value = entryToEdit.endTime;
+                otDetailsInput.value = entryToEdit.details;
+
+                document.querySelectorAll('.btn-ot-rate').forEach(btn => btn.classList.remove('selected'));
+                const selectedRateBtn = document.querySelector(`.btn-ot-rate[data-rate="${entryToEdit.otRateMultiplier}"]`);
+                if (selectedRateBtn) {
+                    selectedRateBtn.classList.add('selected');
+                } else {
+                    console.warn(`OT Rate button not found for rate: ${entryToEdit.otRateMultiplier}`);
+                }
+
+                addOtEntryBtn.classList.add('hidden');
+                updateOtEntryBtn.classList.remove('hidden');
+                cancelEditBtn.classList.remove('hidden');
+            } else {
+                console.warn('Entry with ID not found:', id);
+                showMessage('ไม่พบรายการ OT ที่ต้องการแก้ไข กรุณาลองใหม่อีกครั้ง');
+            }
+        }
+
+        function deleteOtEntry(id) {
+            if (confirm('คุณแน่ใจหรือไม่ที่ต้องการลบรายการ OT นี้?')) {
+                otEntries = otEntries.filter(entry => entry.id !== id);
+                saveOtEntries();
+                showMessage('ลบรายการ OT เรียบร้อยแล้ว!');
+                if (editingEntryId === id) { // If deleting the one being edited
+                    clearForm();
+                    editingEntryId = null;
+                    addOtEntryBtn.classList.remove('hidden');
+                    updateOtEntryBtn.classList.add('hidden');
+                    cancelEditBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        // Export functions from ot_tracker_full.html
+        function exportCSV() {
+            const csv = ['วันที่,เวลาเริ่ม,เวลาสิ้นสุด,OT,ชั่วโมง,ค่าแรง,รายละเอียด'];
+            otEntries.forEach(e => {
+                csv.push(`${e.date},${e.startTime},${e.endTime},${e.otRateMultiplier}x,${e.calculatedHours.toFixed(2)},${e.calculatedPay.toFixed(2)},"${e.details || ''}"`);
+            });
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'ot_data.csv';
+            link.click();
+        }
+
+        function exportExcel() {
+            // Map otEntries to a simpler format for Excel export, matching original 'ot_tracker_full.html' fields
+            const dataForExcel = otEntries.map(e => ({
+                วันที่: e.date,
+                เวลาเริ่ม: e.startTime,
+                เวลาสิ้นสุด: e.endTime,
+                OT: `${e.otRateMultiplier}x`,
+                ชั่วโมง: parseFloat(e.calculatedHours.toFixed(2)),
+                ค่าแรง: parseFloat(e.calculatedPay.toFixed(2)),
+                รายละเอียด: e.details || ''
+            }));
+            const ws = XLSX.utils.json_to_sheet(dataForExcel);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'OT');
+            XLSX.writeFile(wb, 'ot_data.xlsx');
+        }
+
+        async function exportPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            let y = 20; // Start lower to accommodate title
+            doc.setFont('Prompt', 'normal'); // Set font for Thai characters
+            doc.text("สรุปรายการ OT", 10, y);
+            y += 10;
+            otEntries.forEach(e => {
+                const text = `${formatDate(e.date)} ${e.startTime}-${e.endTime} OT ${e.otRateMultiplier}x ${e.calculatedHours.toFixed(2)} ชม. ${e.calculatedPay.toFixed(2)} ฿`;
+                doc.text(text, 10, y);
+                y += 7; // Reduce line height for more entries
+            });
+            doc.save("ot_data.pdf");
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set today's date as default
+            otDateInput.value = getTodayDateString();
+
+            loadSettings();
+            loadOtEntries();
+            populateSummaryFilters(); // Populate dropdowns first
+            updateSummaries(); // Then update summaries based on default selected month/year
+            // Apply dark mode based on user preference from localStorage if any
+            if (localStorage.getItem('theme') === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        });
+    </script>
+</body>
+</html>
